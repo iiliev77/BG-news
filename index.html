@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="bg">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BG News Dashboard</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;background:#07101d;color:#fff;font-family:Arial,Helvetica,sans-serif}
+header{height:105px;padding:16px 28px;background:#111c2d;border-bottom:2px solid #2a3b58;display:flex;align-items:center;justify-content:space-between}
+.logo{font-size:32px;font-weight:700}.logo span{color:#d3a4ff}
+.clock{text-align:right}.time{font-size:30px;font-weight:700}.date{font-size:15px;color:#aab8cb;margin-top:3px}
+.status{padding:8px 28px;background:#0d1727;color:#91a1b7;font-size:14px}
+.status strong{color:#fff}
+#dashboard{padding:18px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+.category h2{font-size:22px;margin:0 0 11px;padding-bottom:8px;border-bottom:2px solid #344a6e}
+.card{display:block;background:#141f31;border:1px solid #293b59;border-radius:9px;overflow:hidden;margin-bottom:14px;text-decoration:none;color:#fff}
+.card:hover{background:#1c2a42}
+.card img{width:100%;height:135px;object-fit:cover;display:block;background:#263750}
+.content{padding:10px 11px 12px}
+.title{font-size:17px;font-weight:700;line-height:1.3}
+.source{font-size:12px;color:#8ea2bd;margin-top:7px}
+.msg{padding:28px;text-align:center;background:#141f31;border:1px solid #293b59;border-radius:9px;color:#aab8cb}
+footer{text-align:center;color:#667991;font-size:12px;padding:5px 20px 20px}
+@media(max-width:1200px){.grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){header{height:auto}.logo{font-size:22px}.time{font-size:22px}.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🇧🇬 <span>BG News</span> Dashboard</div>
+  <div class="clock">
+    <div class="time" id="time">--:--</div>
+    <div class="date" id="date">--</div>
+  </div>
+</header>
+
+<div class="status">
+  Източник: <strong>Blitz.bg</strong> · Последно обновяване:
+  <strong id="updated">зареждане...</strong> · обновяване на всеки 5 минути
+</div>
+
+<div id="dashboard">
+  <div class="msg">Зареждам новините...</div>
+</div>
+
+<footer>BG News Dashboard · Blitz.bg</footer>
+
+<script>
+const WORKER="https://bulgarian-news-dashboard.iilievwork.workers.dev/";
+const FALLBACK=[
+ "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=900&q=80",
+ "https://images.unsplash.com/photo-1495020689067-958852a7765e?auto=format&fit=crop&w=900&q=80",
+ "https://images.unsplash.com/photo-1521295121783-8a321d551ad2?auto=format&fit=crop&w=900&q=80",
+ "https://images.unsplash.com/photo-1500534623283-312aade485b7?auto=format&fit=crop&w=900&q=80"
+];
+
+function clock(){
+ const d=new Date();
+ time.textContent=d.toLocaleTimeString("bg-BG",{hour:"2-digit",minute:"2-digit"});
+ date.textContent=d.toLocaleDateString("bg-BG",{weekday:"long",day:"2-digit",month:"long"});
+}
+clock();setInterval(clock,1000);
+
+function cat(item){
+ const t=((item.category||"")+" "+(item.title||"")).toLowerCase();
+ if(/спорт|футбол|цска|левски|лудогорец/.test(t))return"⚽ Спорт";
+ if(/бизнес|иконом|пазар|евро/.test(t))return"💰 Бизнес";
+ if(/технолог|изкуствен интелект|робот|ai/.test(t))return"💻 Технологии";
+ if(/свят|германия|русия|украйна|америка|иран/.test(t))return"🌍 Свят";
+ return"🇧🇬 България";
+}
+
+function card(item,i){
+ const a=document.createElement("a");
+ a.className="card";a.href=item.link||"#";a.target="_blank";a.rel="noopener noreferrer";
+ const img=document.createElement("img");
+ img.src=item.image||FALLBACK[i%FALLBACK.length];img.loading="lazy";
+ img.onerror=()=>img.src=FALLBACK[i%FALLBACK.length];
+ const c=document.createElement("div");c.className="content";
+ const t=document.createElement("div");t.className="title";t.textContent=item.title||"Без заглавие";
+ const s=document.createElement("div");s.className="source";s.textContent=(item.source||"Blitz.bg")+(item.time?" · "+item.time:"");
+ c.append(t,s);a.append(img,c);return a;
+}
+
+async function load(){
+ const root=document.getElementById("dashboard");
+ root.innerHTML='<div class="msg">Зареждам новините от Blitz.bg...</div>';
+ try{
+   const r=await fetch(WORKER+"?source=blitz&v="+Date.now(),{cache:"no-store"});
+   if(!r.ok)throw new Error("Worker HTTP "+r.status);
+   const data=await r.json();
+   if(!Array.isArray(data.items)||!data.items.length)throw new Error(data.error||"Няма новини");
+   const groups={"🇧🇬 България":[],"🌍 Свят":[],"⚽ Спорт":[],"💰 Бизнес":[],"💻 Технологии":[]};
+   data.items.forEach(x=>{const k=cat(x);if(groups[k]&&groups[k].length<5)groups[k].push(x)});
+   const grid=document.createElement("div");grid.className="grid";
+   Object.entries(groups).forEach(([name,items])=>{
+     if(!items.length)return;
+     const sec=document.createElement("section");sec.className="category";
+     const h=document.createElement("h2");h.textContent=name;sec.appendChild(h);
+     items.forEach((x,i)=>sec.appendChild(card(x,i)));
+     grid.appendChild(sec);
+   });
+   root.innerHTML="";root.appendChild(grid);
+   document.getElementById("updated").textContent=new Date().toLocaleTimeString("bg-BG",{hour:"2-digit",minute:"2-digit"});
+ }catch(e){
+   console.error(e);
+   root.innerHTML='<div class="msg">Новините временно не могат да бъдат заредени.<br><br>Ще опитам отново автоматично.</div>';
+ }
+}
+
+load();
+setInterval(load,5*60*1000);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")load()});
+</script>
+</body>
+</html>
